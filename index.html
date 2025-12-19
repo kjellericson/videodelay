@@ -1,0 +1,196 @@
+<!DOCTYPE html5>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Display Webcam Stream</title>
+
+    <style>
+        #pausebutton,
+        #replaybutton {
+            font-size: 2em;
+            border-radius: 5%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div>
+            <div style="display: grid; grid-template-columns: auto  auto  auto 1fr; gap: 2px; align-items: left;">
+                <span>Buffer:</span>
+                <span id="bufferCount"></span>
+                <span>frames</span>
+                <span></span>
+
+                <span>Delay:</span>
+                <input type="range" id="delaySlider" min="0" max="20" value="3" step="0.5"
+                    oninput="document.getElementById('delayValue').innerText=this.value;">
+                <span><span id="delayValue">3</span> seconds</span>
+                <span></span>
+
+                <span>Reply buffer:</span>
+                <input type="range" id="replyBufferSlider" min="0" max="20" value="10" step="0.5"
+                    oninput="document.getElementById('replyBufferValue').innerText=this.value;">
+                <span><span id="replyBufferValue">10</span> seconds</span>
+                <span></span>
+            </div>
+            <button id="replaybutton" onclick="replay()">Replay</button>
+            <button id="pausebutton" onclick="togglePause()">Pause</button>
+            <br>
+            Resize:
+            <button onclick="window.location.href='?width=640'">Small</button>
+            <button onclick="window.location.href='?width=800'">Medium</button>
+            <button onclick="window.location.href='?width=1024'">Large</button>
+            <button onclick="window.location.href='?width=1280'">Very large</button>
+        </div>
+        <img id="videoElement" />
+    </div>
+    <script>
+        var video = document.querySelector("#videoElement");
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const delayedVideo = document.createElement('video');
+        const mediaRecorder_chunks = [];
+        let mediaRecorder;
+
+        const frameBuffer = [];
+
+        let replay_end_time = 0;
+        let replay_offset = 0;
+
+        const hiddenVideo = document.createElement('video');
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    hiddenVideo.style.display = 'none';
+                    hiddenVideo.srcObject = stream;
+                    hiddenVideo.play();
+
+                    // Set canvas size based on URL parameter or default
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const widthParam = urlParams.get('width');
+                    if (widthParam) {
+                        canvas.width = parseInt(widthParam);
+                    } else {
+                        canvas.width = 800;
+                    }
+                    canvas.height = (canvas.width * 600) / 800;
+
+                    // Add this row if you want to see the current captured frames
+                    //video.parentNode.appendChild(canvas);
+
+                    function captureFrame() {
+                        const timestamp = Date.now();
+                        ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+
+                        // Add timestamp as text overlay on the image
+                        ctx.font = '20px Arial';
+                        ctx.fillStyle = 'yellow';
+                        ctx.strokeStyle = 'black';
+                        ctx.lineWidth = 2;
+                        const timeText = new Date(timestamp).toLocaleTimeString() + '.' + (timestamp % 1000);
+                        ctx.strokeText(timeText, 10, 30);
+                        ctx.fillText(timeText, 10, 30);
+
+                        // Push frame to buffer
+                        const imageData = canvas.toDataURL('image/png');
+                        frameBuffer.push({ timestamp, imageData });
+
+                        // Find the delayed frame to display
+                        let delayedFrame = null;
+
+                        if (replay_end_time > 0) {
+                            // We are in replay mode
+
+                            // Delete old frames and find next frame to display
+                            while (frameBuffer.length > 0 && frameBuffer[0].timestamp < timestamp + replay_offset) {
+                                delayedFrame = frameBuffer.shift();
+                            }
+
+                            // Determine if we reached the end of the replay
+                            if (delayedFrame && delayedFrame.timestamp >= replay_end_time) {
+                                replay_end_time = 0;
+                                document.getElementById('replaybutton').disabled = false;
+                            }
+                        } else {
+                            // Normal live delay mode
+
+                            var replyBufferSeconds = parseFloat(document.getElementById('replyBufferSlider').value);
+                            var delaySeconds = parseFloat(document.getElementById('delaySlider').value);
+
+                            // Remove old frames beyond the reply buffer
+                            const cutoffTimestamp = timestamp - replyBufferSeconds * 1000 - delaySeconds * 1000;
+                            while (frameBuffer.length > 0 && frameBuffer[0].timestamp < cutoffTimestamp) {
+                                frameBuffer.shift();
+                            }
+
+                            // Find first frame that matches the delay
+                            const delayedTimestamp = timestamp - delaySeconds * 1000;
+                            delayedFrame = frameBuffer.find(frame => frame.timestamp >= delayedTimestamp);
+                        }
+
+                        // Update buffer count display
+                        document.getElementById('bufferCount').innerText = frameBuffer.length;
+
+                        // Display the delayed frame if found
+                        if (delayedFrame) {
+                            var video = document.querySelector("#videoElement");
+                            const img = new Image();
+                            img.onload = function () {
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            };
+                            img.src = delayedFrame.imageData;
+                            video.style.display = 'block';
+                            video.src = delayedFrame.imageData;
+                        }
+
+                        // Schedule next frame capture
+                        if (!isPaused)
+                            requestAnimationFrame(captureFrame);
+                    }
+
+                    // Start capturing frames when the hidden video is playing
+                    hiddenVideo.addEventListener('playing', function () {
+                        captureFrame();
+                    });
+                })
+                .catch(function (err0r) {
+                    console.log("Something went wrong!");
+                });
+        }
+
+        // Pause/Resume function
+        var isPaused = false;
+        function togglePause() {
+            isPaused = !isPaused;
+            var pauseButton = document.getElementById('pausebutton');
+            if (isPaused) {
+                pauseButton.innerText = 'Resume';
+                hiddenVideo.pause();
+            } else {
+                pauseButton.innerText = 'Pause';
+                hiddenVideo.play();
+                requestAnimationFrame(captureFrame);
+            }
+        }
+
+        // Replay function
+        function replay() {
+            var delaySeconds = parseFloat(document.getElementById('delaySlider').value);
+
+            // Set replay to end at current shown time
+            replay_end_time = Date.now() - delaySeconds * 1000;
+
+            // Offset of replay is from the first frame in buffer
+            replay_offset = frameBuffer[0].timestamp - replay_end_time - delaySeconds * 1000;
+
+            document.getElementById('replaybutton').disabled = true;
+        }
+
+    </script>
+</body>
+
+</html>
