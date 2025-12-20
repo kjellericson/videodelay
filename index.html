@@ -11,6 +11,17 @@
             font-size: 2em;
             border-radius: 5%;
         }
+
+        #timediff {
+            font-size: 1.5em;
+            color: black;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(5px);
+            padding: 5px 10px;
+            border-radius: 50%;
+
+        }
     </style>
 </head>
 
@@ -19,8 +30,8 @@
         <div>
             <div style="display: grid; grid-template-columns: auto  auto  auto 1fr; gap: 2px; align-items: left;">
                 <span>Buffer:</span>
-                <span id="bufferCount"></span>
-                <span>frames</span>
+                <span id="bufferSeconds"></span>
+                <span>seconds</span>
                 <span></span>
 
                 <span>Delay:</span>
@@ -44,7 +55,10 @@
             <button onclick="window.location.href='?width=1024'">Large</button>
             <button onclick="window.location.href='?width=1280'">Very large</button>
         </div>
-        <img id="videoElement" />
+        <div style="position: relative; display: inline-block;">
+            <span id="timediff" style="position: absolute; top: 0; left: 0;"></span>
+            <img id="videoElement" style="display: block;" />
+        </div>
     </div>
     <script>
         var video = document.querySelector("#videoElement");
@@ -86,15 +100,6 @@
                         const timestamp = Date.now();
                         ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
 
-                        // Add timestamp as text overlay on the image
-                        ctx.font = '20px Arial';
-                        ctx.fillStyle = 'yellow';
-                        ctx.strokeStyle = 'black';
-                        ctx.lineWidth = 2;
-                        const timeText = new Date(timestamp).toLocaleTimeString() + '.' + (timestamp % 1000);
-                        ctx.strokeText(timeText, 10, 30);
-                        ctx.fillText(timeText, 10, 30);
-
                         // Push frame to buffer
                         const imageData = canvas.toDataURL('image/png');
                         frameBuffer.push({ timestamp, imageData });
@@ -133,16 +138,30 @@
                         }
 
                         // Update buffer count display
-                        document.getElementById('bufferCount').innerText = frameBuffer.length;
+                        if (frameBuffer.length > 0) {
+                            let firstTimestamp = frameBuffer[0].timestamp;
+                            let lastTimestamp = frameBuffer[frameBuffer.length - 1].timestamp;
+                            document.getElementById('bufferSeconds').innerText = ((lastTimestamp - firstTimestamp) / 1000).toFixed(1);
+                        }
 
                         // Display the delayed frame if found
                         if (delayedFrame) {
                             var video = document.querySelector("#videoElement");
                             const img = new Image();
-                            img.onload = function () {
-                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            };
                             img.src = delayedFrame.imageData;
+
+                            // Display time difference
+                            let difftext = '';
+                            if (replay_end_time > 0) {
+                                let timediff = delayedFrame.timestamp - replay_end_time;
+                                difftext = (-timediff / 1000).toFixed(1) + ' replay';
+                            } else {
+                                let timediff = delayedFrame.timestamp - timestamp;
+                                difftext = (-timediff / 1000).toFixed(1) + ' seconds ago';
+                            }
+                            document.getElementById('timediff').innerText = difftext;
+
+                            // Show the frame
                             video.style.display = 'block';
                             video.src = delayedFrame.imageData;
                         }
@@ -170,6 +189,9 @@
             if (isPaused) {
                 pauseButton.innerText = 'Resume';
                 hiddenVideo.pause();
+                setTimeout(() => {
+                    document.getElementById('timediff').innerText = "Paused";
+                }, 100);
             } else {
                 pauseButton.innerText = 'Pause';
                 hiddenVideo.play();
