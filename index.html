@@ -25,7 +25,7 @@
     </style>
 </head>
 
-<body>
+<body onload="init()">
     <div id="container">
         <div>
             <div style="display: grid; grid-template-columns: auto  auto  auto 1fr; gap: 2px; align-items: left;">
@@ -55,12 +55,16 @@
             <button onclick="window.location.href='?width=1024'">Large</button>
             <button onclick="window.location.href='?width=1280'">Very large</button>
         </div>
+        <div>
+            <select id="videoSource"></select>
+        </div>
         <div style="position: relative; display: inline-block;">
             <span id="timediff" style="position: absolute; top: 0; left: 0;"></span>
             <img id="videoElement" style="display: block;" />
         </div>
     </div>
     <script>
+        const hiddenVideo = document.createElement('video');
         var video = document.querySelector("#videoElement");
 
         const canvas = document.createElement('canvas');
@@ -74,111 +78,126 @@
         let replay_end_time = 0;
         let replay_offset = 0;
 
-        const hiddenVideo = document.createElement('video');
+        function restart_stream() {
+            frameBuffer.length = 0; // Clear frame buffer
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const videoSelect = document.querySelector('select#videoSource');
+                const videoSource = videoSelect.value;
+                const constraints = {
+                    video: { deviceId: videoSource ? { exact: videoSource } : undefined }
+                };
 
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(function (stream) {
-                    hiddenVideo.style.display = 'none';
-                    hiddenVideo.srcObject = stream;
-                    hiddenVideo.play();
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then(function (stream) {
+                        hiddenVideo.style.display = 'none';
+                        hiddenVideo.srcObject = stream;
+                        hiddenVideo.play();
 
-                    // Set canvas size based on URL parameter or default
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const widthParam = urlParams.get('width');
-                    if (widthParam) {
-                        canvas.width = parseInt(widthParam);
-                    } else {
-                        canvas.width = 800;
-                    }
-                    canvas.height = (canvas.width * 600) / 800;
-
-                    // Add this row if you want to see the current captured frames
-                    //video.parentNode.appendChild(canvas);
-
-                    function captureFrame() {
-                        const timestamp = Date.now();
-                        ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
-
-                        // Push frame to buffer
-                        const imageData = canvas.toDataURL('image/png');
-                        frameBuffer.push({ timestamp, imageData });
-
-                        // Find the delayed frame to display
-                        let delayedFrame = null;
-
-                        if (replay_end_time > 0) {
-                            // We are in replay mode
-
-                            // Delete old frames and find next frame to display
-                            while (frameBuffer.length > 0 && frameBuffer[0].timestamp < timestamp + replay_offset) {
-                                delayedFrame = frameBuffer.shift();
-                            }
-
-                            // Determine if we reached the end of the replay
-                            if (delayedFrame && delayedFrame.timestamp >= replay_end_time) {
-                                replay_end_time = 0;
-                                document.getElementById('replaybutton').disabled = false;
-                            }
+                        // Set canvas size based on URL parameter or default
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const widthParam = urlParams.get('width');
+                        if (widthParam) {
+                            canvas.width = parseInt(widthParam);
                         } else {
-                            // Normal live delay mode
-
-                            var replyBufferSeconds = parseFloat(document.getElementById('replyBufferSlider').value);
-                            var delaySeconds = parseFloat(document.getElementById('delaySlider').value);
-
-                            // Remove old frames beyond the reply buffer
-                            const cutoffTimestamp = timestamp - replyBufferSeconds * 1000 - delaySeconds * 1000;
-                            while (frameBuffer.length > 0 && frameBuffer[0].timestamp < cutoffTimestamp) {
-                                frameBuffer.shift();
-                            }
-
-                            // Find first frame that matches the delay
-                            const delayedTimestamp = timestamp - delaySeconds * 1000;
-                            delayedFrame = frameBuffer.find(frame => frame.timestamp >= delayedTimestamp);
+                            canvas.width = 800;
                         }
+                        canvas.height = (canvas.width * 600) / 800;
 
-                        // Update buffer count display
-                        if (frameBuffer.length > 0) {
-                            let firstTimestamp = frameBuffer[0].timestamp;
-                            let lastTimestamp = frameBuffer[frameBuffer.length - 1].timestamp;
-                            document.getElementById('bufferSeconds').innerText = ((lastTimestamp - firstTimestamp) / 1000).toFixed(1);
-                        }
+                        // Add this row if you want to see the current captured frames
+                        //video.parentNode.appendChild(canvas);
 
-                        // Display the delayed frame if found
-                        if (delayedFrame) {
-                            var video = document.querySelector("#videoElement");
-                            const img = new Image();
-                            img.src = delayedFrame.imageData;
+                        function captureFrame() {
+                            const timestamp = Date.now();
+                            ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
 
-                            // Display time difference
-                            let difftext = '';
+                            // Push frame to buffer
+                            const imageData = canvas.toDataURL('image/png');
+                            frameBuffer.push({ timestamp, imageData });
+
+                            // Find the delayed frame to display
+                            let delayedFrame = null;
+
                             if (replay_end_time > 0) {
-                                let timediff = delayedFrame.timestamp - replay_end_time;
-                                difftext = (-timediff / 1000).toFixed(1) + ' replay';
-                            } else {
-                                let timediff = delayedFrame.timestamp - timestamp;
-                                difftext = (-timediff / 1000).toFixed(1) + ' seconds ago';
-                            }
-                            document.getElementById('timediff').innerText = difftext;
+                                // We are in replay mode
 
-                            // Show the frame
-                            video.style.display = 'block';
-                            video.src = delayedFrame.imageData;
+                                // Delete old frames and find next frame to display
+                                while (frameBuffer.length > 0 && frameBuffer[0].timestamp < timestamp + replay_offset) {
+                                    delayedFrame = frameBuffer.shift();
+                                }
+
+                                // Determine if we reached the end of the replay
+                                if (delayedFrame && delayedFrame.timestamp >= replay_end_time) {
+                                    replay_end_time = 0;
+                                    document.getElementById('replaybutton').disabled = false;
+                                }
+                            } else {
+                                // Normal live delay mode
+
+                                var replyBufferSeconds = parseFloat(document.getElementById('replyBufferSlider').value);
+                                var delaySeconds = parseFloat(document.getElementById('delaySlider').value);
+
+                                // Remove old frames beyond the reply buffer
+                                const cutoffTimestamp = timestamp - replyBufferSeconds * 1000 - delaySeconds * 1000;
+                                while (frameBuffer.length > 0 && frameBuffer[0].timestamp < cutoffTimestamp) {
+                                    frameBuffer.shift();
+                                }
+
+                                // Find first frame that matches the delay
+                                const delayedTimestamp = timestamp - delaySeconds * 1000;
+                                delayedFrame = frameBuffer.find(frame => frame.timestamp >= delayedTimestamp);
+                            }
+
+                            // Update buffer count display
+                            if (frameBuffer.length > 0) {
+                                let firstTimestamp = frameBuffer[0].timestamp;
+                                let lastTimestamp = frameBuffer[frameBuffer.length - 1].timestamp;
+                                document.getElementById('bufferSeconds').innerText = ((lastTimestamp - firstTimestamp) / 1000).toFixed(1);
+                            }
+
+                            // Display the delayed frame if found
+                            if (delayedFrame) {
+                                var video = document.querySelector("#videoElement");
+                                const img = new Image();
+                                img.src = delayedFrame.imageData;
+
+                                // Display time difference
+                                let difftext = '';
+                                if (replay_end_time > 0) {
+                                    let timediff = delayedFrame.timestamp - replay_end_time;
+                                    difftext = (-timediff / 1000).toFixed(1) + ' replay';
+                                } else {
+                                    let timediff = delayedFrame.timestamp - timestamp;
+                                    difftext = (-timediff / 1000).toFixed(1) + ' seconds ago';
+                                }
+                                document.getElementById('timediff').innerText = difftext;
+
+                                // Show the frame
+                                video.style.display = 'block';
+                                video.src = delayedFrame.imageData;
+                            }
+
+                            // Schedule next frame capture
+                            if (!isPaused)
+                                requestAnimationFrame(captureFrame);
                         }
 
-                        // Schedule next frame capture
-                        if (!isPaused)
-                            requestAnimationFrame(captureFrame);
-                    }
-
-                    // Start capturing frames when the hidden video is playing
-                    hiddenVideo.addEventListener('playing', function () {
-                        captureFrame();
+                        // Start capturing frames when the hidden video is playing
+                        hiddenVideo.addEventListener('playing', function () {
+                            captureFrame();
+                        });
+                    })
+                    .catch(function (err0r) {
+                        console.log("Something went wrong!");
                     });
-                })
-                .catch(function (err0r) {
-                    console.log("Something went wrong!");
-                });
+            }
+
+            // Add event listener to restart stream when video source changes
+            document.querySelector('select#videoSource').addEventListener('change', function () {
+                if (hiddenVideo.srcObject) {
+                    hiddenVideo.srcObject.getTracks().forEach(track => track.stop());
+                }
+                restart_stream();
+            });
         }
 
         // Pause/Resume function
@@ -212,6 +231,24 @@
             document.getElementById('replaybutton').disabled = true;
         }
 
+        function find_video_devices() {
+            navigator.mediaDevices.enumerateDevices().then(function (devices) {
+                for (var i = 0; i < devices.length; i++) {
+                    var device = devices[i];
+                    if (device.kind === 'videoinput') {
+                        var option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || 'camera ' + (i + 1);
+                        document.querySelector('select#videoSource').appendChild(option);
+                    }
+                };
+                restart_stream();
+            });
+        }
+
+        function init() {
+            find_video_devices();
+        }
     </script>
 </body>
 
