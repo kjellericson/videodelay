@@ -1,6 +1,5 @@
-<!DOCTYPE html5>
+<!DOCTYPE html>
 <html>
-
 <head>
     <meta charset="utf-8">
     <title>Display Webcam Stream</title>
@@ -26,6 +25,7 @@
 </head>
 
 <body onload="init()">
+    <h1>Video delay</h1>
     <div id="container">
         <div>
             <div style="display: grid; grid-template-columns: auto  auto  auto 1fr; gap: 2px; align-items: left;">
@@ -35,14 +35,20 @@
                 <span></span>
 
                 <span>Delay:</span>
+                <span>
                 <input type="range" id="delaySlider" min="0" max="20" value="3" step="0.5"
-                    oninput="document.getElementById('delayValue').innerText=this.value;">
+                    oninput="document.getElementById('delayValue').innerText=this.value;"
+                    onchange="form_updated()">
+                    </span>
                 <span><span id="delayValue">3</span> seconds</span>
                 <span></span>
 
                 <span>Reply buffer:</span>
-                <input type="range" id="replyBufferSlider" min="0" max="20" value="10" step="0.5"
-                    oninput="document.getElementById('replyBufferValue').innerText=this.value;">
+                <span>
+                    <input type="range" id="replyBufferSlider" min="0" max="20" value="10" step="0.5"
+                    oninput="document.getElementById('replyBufferValue').innerText=this.value;"
+                    onchange="form_updated()">
+                    </span>
                 <span><span id="replyBufferValue">10</span> seconds</span>
                 <span></span>
             </div>
@@ -54,9 +60,8 @@
             <button onclick="window.location.href='?width=800'">Medium</button>
             <button onclick="window.location.href='?width=1024'">Large</button>
             <button onclick="window.location.href='?width=1280'">Very large</button>
-        </div>
-        <div>
-            <select id="videoSource"></select>
+            <br/>
+            <select id="videoSource" onchange="form_updated()"></select>
         </div>
         <div style="position: relative; display: inline-block;">
             <span id="timediff" style="position: absolute; top: 0; left: 0;"></span>
@@ -118,7 +123,7 @@
                             let delayedFrame = null;
 
                             if (replay_end_time > 0) {
-                                // We are in replay mode
+                                // We are in replay mode when replay_end_time is set
 
                                 // Delete old frames and find next frame to display
                                 while (frameBuffer.length > 0 && frameBuffer[0].timestamp < timestamp + replay_offset) {
@@ -176,7 +181,7 @@
                                 video.src = delayedFrame.imageData;
                             }
 
-                            // Schedule next frame capture
+                            // Schedule next frame capture if not paused
                             if (!isPaused)
                                 requestAnimationFrame(captureFrame);
                         }
@@ -214,7 +219,6 @@
             } else {
                 pauseButton.innerText = 'Pause';
                 hiddenVideo.play();
-                requestAnimationFrame(captureFrame);
             }
         }
 
@@ -231,7 +235,38 @@
             document.getElementById('replaybutton').disabled = true;
         }
 
-        function find_video_devices() {
+        // Cache form values in localStorage
+        function form_updated() {
+            const delayValue = document.getElementById('delaySlider').value;
+            const replyBufferValue = document.getElementById('replyBufferSlider').value;
+            const videoSourceValue = document.getElementById('videoSource').value;
+
+            localStorage.setItem('delaySlider', delayValue);
+            localStorage.setItem('replyBufferSlider', replyBufferValue);
+            localStorage.setItem('videoSource', videoSourceValue);
+        }
+
+        // Load form values from localStorage
+        function load_form_values() {
+            const delayValue = localStorage.getItem('delaySlider');
+            const replyBufferValue = localStorage.getItem('replyBufferSlider');
+            const videoSourceValue = localStorage.getItem('videoSource');
+
+            if (delayValue !== null) {
+                document.getElementById('delaySlider').value = delayValue;
+                document.getElementById('delayValue').innerText = delayValue;
+            }
+            if (replyBufferValue !== null) {
+                document.getElementById('replyBufferSlider').value = replyBufferValue;
+                document.getElementById('replyBufferValue').innerText = replyBufferValue;
+            }
+            if (videoSourceValue !== null) {
+                document.getElementById('videoSource').value = videoSourceValue;
+            }
+        }
+
+        // Find all available video input devices and populate the select dropdown
+        function find_video_devices(callback) {
             navigator.mediaDevices.enumerateDevices().then(function (devices) {
                 for (var i = 0; i < devices.length; i++) {
                     var device = devices[i];
@@ -242,14 +277,17 @@
                         document.querySelector('select#videoSource').appendChild(option);
                     }
                 };
-                restart_stream();
+                callback();
             });
         }
 
+        // Called on body-load
         function init() {
-            find_video_devices();
+            find_video_devices(() => {
+                load_form_values();
+                restart_stream();
+            });
         }
     </script>
 </body>
-
 </html>
