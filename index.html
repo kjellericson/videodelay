@@ -15,11 +15,38 @@
             font-size: 1.5em;
             color: black;
             font-weight: bold;
-            background-color: rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.5);
             backdrop-filter: blur(5px);
             padding: 5px 10px;
             border-radius: 50%;
+        }
 
+        #fullscreenbutton {
+            font-size: 2em;
+            border-radius: 5%;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+
+        #container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            background-color: black;
+        }
+
+        #container.fullscreen #videoElement {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+        }
+
+        #container.fullscreen #settings {
+            display: none;
         }
     </style>
 </head>
@@ -27,7 +54,8 @@
 <body onload="init()">
     <h1>Video delay</h1>
     <div id="container">
-        <div>
+        <button id="fullscreenbutton" onclick="toggleFullscreen()">Fullscreen</button>
+        <div id="settings">
             <div style="display: grid; grid-template-columns: auto  auto  auto 1fr; gap: 2px; align-items: left;">
                 <span>Buffer:</span>
                 <span id="bufferSeconds"></span>
@@ -52,10 +80,8 @@
                 <span><span id="replyBufferValue">10</span> seconds</span>
                 <span></span>
             </div>
-            <button id="replaybutton" onclick="replay()">Replay</button>
-            <button id="pausebutton" onclick="togglePause()">Pause</button>
-            <br>
             Resize:
+            <button onclick="window.location.href='?width=320'">Tiny</button>
             <button onclick="window.location.href='?width=640'">Small</button>
             <button onclick="window.location.href='?width=800'">Medium</button>
             <button onclick="window.location.href='?width=1024'">Large</button>
@@ -63,7 +89,11 @@
             <br/>
             <select id="videoSource" onchange="form_updated()"></select>
         </div>
-        <div style="position: relative; display: inline-block;">
+        <span>
+            <button id="replaybutton" onclick="replay()">Replay</button>
+            <button id="pausebutton" onclick="togglePause()">Pause</button>
+        </span>
+        <div style="position: relative;">
             <span id="timediff" style="position: absolute; top: 0; left: 0;"></span>
             <img id="videoElement" style="display: block;" />
         </div>
@@ -279,6 +309,22 @@
                 };
                 callback();
             });
+        }
+
+        // Toggle fullscreen function
+        function toggleFullscreen() {
+            const container = document.getElementById('container');
+            const fullscreenButton = document.getElementById('fullscreenbutton');
+            
+            if (!container.classList.contains('fullscreen')) {
+                // Enter fullscreen
+                container.classList.add('fullscreen');
+                fullscreenButton.innerText = 'Exit Fullscreen';
+            } else {
+                // Exit fullscreen
+                container.classList.remove('fullscreen');
+                fullscreenButton.innerText = 'Fullscreen';
+            }
         }
 
         // Called on body-load
