@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>Display Webcam Stream</title>
@@ -64,19 +65,18 @@
 
                 <span>Delay:</span>
                 <span>
-                <input type="range" id="delaySlider" min="0" max="20" value="3" step="0.5"
-                    oninput="document.getElementById('delayValue').innerText=this.value;"
-                    onchange="form_updated()">
-                    </span>
+                    <input type="range" id="delaySlider" min="0" max="20" value="3" step="0.5"
+                        oninput="document.getElementById('delayValue').innerText=this.value;" onchange="form_updated()">
+                </span>
                 <span><span id="delayValue">3</span> seconds</span>
                 <span></span>
 
                 <span>Reply buffer:</span>
                 <span>
                     <input type="range" id="replyBufferSlider" min="0" max="20" value="10" step="0.5"
-                    oninput="document.getElementById('replyBufferValue').innerText=this.value;"
-                    onchange="form_updated()">
-                    </span>
+                        oninput="document.getElementById('replyBufferValue').innerText=this.value;"
+                        onchange="form_updated()">
+                </span>
                 <span><span id="replyBufferValue">10</span> seconds</span>
                 <span></span>
             </div>
@@ -86,7 +86,7 @@
             <button onclick="window.location.href='?width=800'">Medium</button>
             <button onclick="window.location.href='?width=1024'">Large</button>
             <button onclick="window.location.href='?width=1280'">Very large</button>
-            <br/>
+            <br />
             <select id="videoSource" onchange="form_updated()"></select>
         </div>
         <span>
@@ -113,6 +113,61 @@
         let replay_end_time = 0;
         let replay_offset = 0;
 
+        function changeCapabilities(track) {
+            console.log("Settings: ", track.getSettings());
+            console.log("Capabilities: ", track.getCapabilities());
+
+            // Example: Change zoom if supported
+            const capabilities = track.getCapabilities();
+            const settings = track.getSettings();
+
+            // Loop capabilites and create UI for each
+            for (const [capability, value] of Object.entries(capabilities)) {
+                if (typeof value === 'object' && value !== null && (value.min !== undefined || value.max !== undefined)) {
+                    // Create container div
+                    const controlDiv = document.createElement('div');
+                    controlDiv.style.marginBottom = '10px';
+
+                    // Create label
+                    const label = document.createElement('label');
+                    label.textContent = capability + ': ';
+                    label.style.display = 'inline-block';
+                    label.style.width = '120px';
+
+                    // Create range input
+                    const rangeInput = document.createElement('input');
+                    rangeInput.type = 'range';
+                    rangeInput.id = 'capability_' + capability;
+                    rangeInput.min = value.min || 0;
+                    rangeInput.max = value.max || 100;
+                    rangeInput.value = settings[capability] || value.min || 0;
+                    rangeInput.step = value.step || 1;
+
+                    // Create value display
+                    const valueSpan = document.createElement('span');
+                    valueSpan.textContent = rangeInput.value;
+                    valueSpan.style.marginLeft = '10px';
+
+                    // Update value display and apply constraint
+                    rangeInput.addEventListener('input', function () {
+                        valueSpan.textContent = this.value;
+                        const constraints = {};
+                        constraints[capability] = parseFloat(this.value);
+                        track.applyConstraints({ advanced: [constraints] }).catch(console.error);
+                    });
+
+                    // Assemble the control
+                    controlDiv.appendChild(label);
+                    controlDiv.appendChild(rangeInput);
+                    controlDiv.appendChild(valueSpan);
+
+                    // Add to settings div
+                    document.getElementById('settings').appendChild(controlDiv);
+                }
+            }
+
+        }
+
         function restart_stream() {
             frameBuffer.length = 0; // Clear frame buffer
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -124,6 +179,11 @@
 
                 navigator.mediaDevices.getUserMedia(constraints)
                     .then(function (stream) {
+                        console.log(stream.getVideoTracks());
+                        track = stream.getVideoTracks()[0];
+
+                        changeCapabilities(track);
+
                         hiddenVideo.style.display = 'none';
                         hiddenVideo.srcObject = stream;
                         hiddenVideo.play();
@@ -315,7 +375,7 @@
         function toggleFullscreen() {
             const container = document.getElementById('container');
             const fullscreenButton = document.getElementById('fullscreenbutton');
-            
+
             if (!container.classList.contains('fullscreen')) {
                 // Enter fullscreen
                 container.classList.add('fullscreen');
@@ -334,6 +394,15 @@
                 restart_stream();
             });
         }
+        function check() {
+            navigator.mediaDevices.getUserMedia({ video: true }).then((mediaStream) => {
+                console.log(mediaStream.getVideoTracks());
+                track = mediaStream.getVideoTracks()[0];
+                console.log("Settings: ", track.getSettings());
+                console.log("Capabilities: ", track.getCapabilities());
+            });
+        }
     </script>
 </body>
+
 </html>
